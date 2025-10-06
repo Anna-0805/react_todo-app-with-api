@@ -7,8 +7,8 @@ type Props = {
   onDelete: (id: number) => void;
   onSelect?: (todo: Todo) => void;
   onUpdate: (todoId: number, newTitle: string) => Promise<void>;
-  deletingTodoId: number | null;
-  updatingTodoId: number | null;
+  deletingTodoId: number[];
+  updatingTodoId: number[];
 };
 
 // eslint-disable-next-line max-len

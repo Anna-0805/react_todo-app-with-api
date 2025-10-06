@@ -8,8 +8,8 @@ type Props = {
   onDelete: (todoId: number) => void;
   onUpdate: (todoId: number, newTitle: string) => Promise<void>;
   onSelect?: (todo: Todo) => void;
-  deletingTodoId: number | null;
-  updatingTodoId: number | null;
+  deletingTodoId: number[];
+  updatingTodoId: number[];
 };
 
 export const TodoItem: React.FC<Props> = ({
@@ -31,25 +31,23 @@ export const TodoItem: React.FC<Props> = ({
     const trimmed = title.trim();
 
     if (!trimmed) {
-      // ⚠️ если строка пустая → удаляем todo
       try {
         await onDelete(todo.id);
         setIsEditing(false);
       } catch {
-        // Ошибка удаления → остаёмся в режиме редактирования
-        return;
+        setIsEditing(true);
       }
 
       return;
     }
 
     if (trimmed === todo.title) {
-      // Название не изменилось → закрываем
       setIsEditing(false);
 
       return;
     }
 
+    // 🔹 иначе — обновляем
     try {
       await onUpdate(todo.id, trimmed);
       setIsEditing(false);
@@ -115,8 +113,8 @@ export const TodoItem: React.FC<Props> = ({
         data-cy="TodoLoader"
         className={`modal overlay ${
           todo.id === 0 ||
-          deletingTodoId === todo.id ||
-          updatingTodoId === todo.id
+          deletingTodoId?.includes(todo.id) ||
+          updatingTodoId?.includes(todo.id)
             ? 'is-active'
             : ''
         }`}

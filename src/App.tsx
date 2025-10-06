@@ -27,8 +27,8 @@ export const App: React.FC = () => {
   const [filter, setFilter] = useState<SortType>(SortType.All);
   const [loading, setLoading] = useState(false);
   const [newTodoTitle, setNewTodoTitle] = useState('');
-  const [deletingTodoId, setDeletingTodoId] = useState<number | null>(null);
-  const [updatingTodoId, setUpdatingTodoId] = useState<number | null>(null);
+  const [deletingTodoIds, setDeletingTodoIds] = useState<number[]>([]);
+  const [updatingTodoIds, setUpdatingTodoIds] = useState<number[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -38,9 +38,6 @@ export const App: React.FC = () => {
     setTimeout(() => setIsErrorVisible(false), 3000);
   };
 
-  // -------------------
-  // Fetch Todos
-  // -------------------
   useEffect(() => {
     if (!USER_ID) {
       return;
@@ -73,23 +70,23 @@ export const App: React.FC = () => {
 
   const visibleTodos = getVisibleTodos(filter, todos);
 
-  // -------------------
-  // Todo Handlers
-  // -------------------
+  // ------------------- Delete -------------------
   const handleDelete = async (id: number) => {
-    setDeletingTodoId(id);
+    setDeletingTodoIds(prev => [...prev, id]);
+
     try {
       await deleteTodo(id);
       setTodos(prev => prev.filter(todo => todo.id !== id));
-    } catch {
+    } catch (err) {
       showError(ErrorMessage.DeleteTodo);
-      throw new Error('Delete failed');
+      throw err;
     } finally {
-      setDeletingTodoId(null);
+      setDeletingTodoIds(prev => prev.filter(todoId => todoId !== id));
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   };
 
+  // ------------------- Add -------------------
   const handleAdd = async (title: string) => {
     const trimmed = title.trim();
 
@@ -122,8 +119,10 @@ export const App: React.FC = () => {
     }
   };
 
+  // ------------------- Toggle -------------------
   const handleToggle = async (todo: Todo) => {
-    setUpdatingTodoId(todo.id);
+    setUpdatingTodoIds(prev => [...prev, todo.id]);
+
     try {
       const updated = await updateTodo(todo.id, { completed: !todo.completed });
 
@@ -131,12 +130,13 @@ export const App: React.FC = () => {
     } catch {
       showError(ErrorMessage.UpdateTodo);
     } finally {
-      setUpdatingTodoId(null);
+      setUpdatingTodoIds(prev => prev.filter(id => id !== todo.id));
     }
   };
 
+  // ------------------- Update -------------------
   const handleUpdate = async (id: number, newTitle: string) => {
-    setUpdatingTodoId(id);
+    setUpdatingTodoIds(prev => [...prev, id]);
     try {
       const updated = await updateTodo(id, { title: newTitle });
 
@@ -145,15 +145,23 @@ export const App: React.FC = () => {
       showError(ErrorMessage.UpdateTodo);
       throw new Error('Update failed');
     } finally {
-      setUpdatingTodoId(null);
+      setUpdatingTodoIds(prev => prev.filter(tid => tid !== id));
     }
   };
 
+  // ------------------- Clear Completed -------------------
   const clearCompleted = async () => {
     const completedTodos = todos.filter(todo => todo.completed);
+    const ids = completedTodos.map(todo => todo.id);
+
+    // показать загрузчик на всех
+    setDeletingTodoIds(prev => [...prev, ...ids]);
+
     const results = await Promise.allSettled(
       completedTodos.map(todo => deleteTodo(todo.id)),
     );
+
+    setDeletingTodoIds(prev => prev.filter(id => !ids.includes(id)));
 
     setTodos(prev =>
       prev.filter(todo => {
@@ -170,33 +178,41 @@ export const App: React.FC = () => {
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
+  // ------------------- Toggle All -------------------
   const toggleAll = async () => {
     if (todos.length === 0) {
       return;
     }
 
     const shouldComplete = !todos.every(todo => todo.completed);
-    const promises = todos
-      .filter(todo => todo.completed !== shouldComplete)
-      .map(todo => updateTodo(todo.id, { completed: shouldComplete }));
+    const toUpdate = todos.filter(todo => todo.completed !== shouldComplete);
+
+    const ids = toUpdate.map(todo => todo.id);
+
+    setUpdatingTodoIds(prev => [...prev, ...ids]);
 
     try {
-      const updatedTodos = await Promise.all(promises);
+      const updatedTodos = await Promise.all(
+        toUpdate.map(todo =>
+          updateTodo(todo.id, { completed: shouldComplete }),
+        ),
+      );
 
       setTodos(prev =>
         prev.map(todo => updatedTodos.find(u => u.id === todo.id) || todo),
       );
     } catch {
       showError(ErrorMessage.UpdateTodo);
+    } finally {
+      setUpdatingTodoIds(prev => prev.filter(id => !ids.includes(id)));
     }
   };
 
-  // -------------------
-  // Render
-  // -------------------
+  // ------------------- Render -------------------
   return (
     <div className="todoapp">
       <h1 className="todoapp__title">todos</h1>
+
       <div className="todoapp__content">
         <Header
           loading={loading}
@@ -212,8 +228,8 @@ export const App: React.FC = () => {
           todos={visibleTodos}
           onDelete={handleDelete}
           onSelect={handleToggle}
-          deletingTodoId={deletingTodoId}
-          updatingTodoId={updatingTodoId}
+          deletingTodoId={deletingTodoIds}
+          updatingTodoId={updatingTodoIds}
           onUpdate={handleUpdate}
         />
 
